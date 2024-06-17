@@ -1,76 +1,95 @@
-# Event Management System
+# Event Management System API
 
-This project is an Event Management System built with ASP.NET Core, Entity Framework Core, and PostgreSQL. It leverages Microsoft Identity for authentication and role-based authorization, along with various Azure services such as Azure Blob Storage, Application Insights, and Cosmos DB for PostgreSQL.
-
-## Table of Contents
-
-1. [Project Description](#project-description)
-2. [Features](#features)
-3. [Set Up](#set-up)
-   - [Azure Accounts and Services](#azure-accounts-and-services)
-   - [Configure Application](#configure-application)
-   - [Apply Migrations](#apply-migrations)
-4. [Containerization and Deployment](#containerization-and-deployment)
-   - [Create Dockerfile](#create-dockerfile)
-   - [Build and Run Docker Container Locally](#build-and-run-docker-container-locally)
-   - [Deploy to Azure](#deploy-to-azure)
-5. [Guideline](#guideline)
-6. [Contributing](#contributing)
-7. [License](#license)
+![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Azure](https://img.shields.io/badge/Azure-Enabled-blue)
+![ASP.NET Core](https://img.shields.io/badge/ASP.NET%20Core-8.0-blue)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Enabled-blue)
 
 ## Project Description
 
-The Event Management System allows users to register, manage their profiles, and participate in events. It includes role-based access control with different roles such as Admin, Event Provider, and User. Admins can manage users and roles, while Event Providers can create and manage events.
+The Event Management System is a web application built with ASP.NET Core, Entity Framework Core, and PostgreSQL. It uses ASP.NET Core Identity for user authentication and authorization, and integrates with Azure services for storage and monitoring.
 
 ## Features
 
-- **User Management:**
+1. **User registration and authentication** with ASP.NET Core Identity.
+2. **Role-based authorization** (Admin, EventProvider, User).
+3. **CRUD operations** for events.
+4. **Event registration with FIFO processing** using Azure Service Bus and Azure Functions.
+5. **Storage of event metadata and user interactions** in Cosmos DB for NoSQL. (_Optional_)
+6. **Storage of images and documents** in Azure Blob Storage.
+7. **Caching of event data** with Redis. (_Optional_)
+8. **Monitoring and diagnostics** with Azure Application Insights.
 
-  - Register, update profile, and delete account
-  - Role-based access control (Admin, Event Provider, User)
+## Database Structure
 
-- **Event Management:**
+- **Cosmos DB for PostgreSQL**
+  - **Users:** Stores user information including authentication details.
+  - **Events:** Stores details of each event.
+  - **EventRegistrations:** Tracks which users have registered for which events.
+- **Cosmos DB for NoSQL**
+  - **EventMetadata:** Stores additional metadata for events (tags, type, ). When users search for events, we can use metadata.
+  - **UserInteractions:** Stores user interactions related to events.
+  - Example:
+      ````
+        public async Task<IEnumerable<EventMetadata>> SearchEventsByMetadataAsync(string[] tags, string type, string category)
+        {
+            var query = new QueryDefinition("SELECT * FROM c WHERE ARRAY_CONTAINS(@tags, c.tags) AND c.type = @type AND c.category = @category")
+                .WithParameter("@tags", tags)
+                .WithParameter("@type", type)
+                .WithParameter("@category", category);
 
-  - Event Providers can create and manage events
+            var iterator = _eventMetadataContainer.GetItemQueryIterator<EventMetadata>(query);
+            var results = new List<EventMetadata>();
 
-- **Role Management:**
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                results.AddRange(response.ToList());
+            }
 
-  - Admins can create roles, assign roles to users, and remove roles from users
+            return results;
+        }
 
-- **Integration with Azure Services:**
-  - **Azure Blob Storage** for storing event media
-  - **Application Insights** for monitoring and logging
-  - **Cosmos DB for PostgreSQL** for scalable database management
-  - **Entra ID** for secure authentication and authorization
+        public async Task<IEnumerable<Event>> GetMostViewedEventsAsync()
+        {
+            var query = new QueryDefinition("SELECT c.eventId, COUNT(c.id) as views FROM c WHERE c.interactionType = 'view' GROUP BY c.eventId ORDER BY views DESC");
 
-## Set Up
+            var iterator = _userInteractionsContainer.GetItemQueryIterator<UserInteraction>(query);
+            var results = new List<UserInteraction>();
 
-### Azure Accounts and Services
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                results.AddRange(response.ToList());
+            }
 
-1. **Azure Account:**
+            var eventIds = results.Select(r => r.EventId).Distinct();
+            var events = new List<Event>();
 
-   - Sign up for an [Azure Account](https://azure.microsoft.com/en-us/free/).
+            foreach (var eventId in eventIds)
+            {
+                var eventResponse = await _eventsContainer.ReadItemAsync<Event>(eventId, new PartitionKey(eventId));
+                events.Add(eventResponse.Resource);
+            }
 
-2. **Create Azure Cosmos DB for PostgreSQL:**
+            return events;
+        }
+    ````
+- **Azure Blob Storage**
+  - **EventImages:** Stores images related to events.
+  - **UserProfiles:** Stores user profile pictures.
+  - **EventDocuments:** Stores documents related to events.
 
-   - Follow the [instructions](https://learn.microsoft.com/en-us/azure/cosmos-db/postgresql/) to create a Cosmos DB for PostgreSQL.
+## Workflow
 
-3. **Create Azure Storage Account:**
-
-   - Follow the [instructions](https://docs.microsoft.com/en-us/azure/storage/common/storage-account-create) to create an Azure Storage Account.
-
-4. **Set Up Application Insights:**
-   - Follow the [instructions](https://learn.microsoft.com/en-us/azure/azure-monitor/app/asp-net-core?tabs=netcorenew) to create an Application Insights resource.
-
-### Configure Application
-
-Update the appsettings.json file with your PostgreSQL connection string, Entra ID credentials, Blob Storage details, and Application Insights connection string.
-
-### Apply Migrations
-Apply migrations and update the PostgreSQL database:
-
-````sh
-dotnet ef migrations add InitialCreate
-dotnet ef database update
-````
-
+1. **User accesses the Event Management System web app and signs in.**
+2. **Browser pulls static resources from Azure CDN.**
+3. **User searches for events by metadata.** The web app checks Redis for cached search results.
+4. **If cache miss,** the web app queries Cosmos DB for event data and stores the results in Redis.
+5. **Web app retrieves event details from Redis** if available, otherwise from Cosmos DB, and updates the cache.
+6. **Pulls event-related images and documents from Azure Blob Storage.**
+7. **User registers/unregisters for an event.** Registration information is placed in an Azure Service Bus queue with sessions enabled.
+8. **Azure Functions processes the registration/unregistration** from the Service Bus queue, ensuring FIFO order, use transaction to modify event's properties.
+9. **Azure Functions updates the registration status in Cosmos DB** and may trigger other necessary actions such as sending confirmation emails.
+10. **Application Insights monitors and diagnoses issues** in the application.
