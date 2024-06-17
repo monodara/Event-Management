@@ -31,7 +31,7 @@ The Event Management System is a web application built with ASP.NET Core, Entity
   - **EventMetadata:** Stores additional metadata for events (tags, type, ). When users search for events, we can use metadata.
   - **UserInteractions:** Stores user interactions related to events.
   - Example:
-      ````
+      ````csharp
         public async Task<IEnumerable<EventMetadata>> SearchEventsByMetadataAsync(string[] tags, string type, string category)
         {
             var query = new QueryDefinition("SELECT * FROM c WHERE ARRAY_CONTAINS(@tags, c.tags) AND c.type = @type AND c.category = @category")
@@ -93,3 +93,133 @@ The Event Management System is a web application built with ASP.NET Core, Entity
 8. **Azure Functions processes the registration/unregistration** from the Service Bus queue, ensuring FIFO order, use transaction to modify event's properties.
 9. **Azure Functions updates the registration status in Cosmos DB** and may trigger other necessary actions such as sending confirmation emails.
 10. **Application Insights monitors and diagnoses issues** in the application.
+
+## Alternative account management strategy
+- Instead of managing ApplicationUser in the code base, you can consider using EntraID & Microsoft Graph to manage all registration. login, authentication (In this case, there will be no ApplicationUser in your code base, but only use UserId in Event registration. UserId will be taken from EntraId)
+- Example:
+  - Dependency Injection in `Program.cs`
+  ````csharp
+  builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("EntraID"));
+
+  // Add Microsoft Graph SDK
+  var confidentialClientApplication = ConfidentialClientApplicationBuilder
+    .Create(builder.Configuration["EntraId:ClientId"])
+    .WithTenantId(builder.Configuration["EntraId:TenantId"])
+    .WithClientSecret(builder.Configuration["EntraId:ClientSecret"])
+    .Build();
+
+  builder.Services.AddSingleton<IConfidentialClientApplication>(confidentialClientApplication);
+  builder.Services.AddSingleton<IAuthenticationProvider, ClientCredentialProvider>();
+
+  builder.Services.AddSingleton<GraphServiceClient>(provider =>
+  {
+      var authProvider = provider.GetRequiredService<IAuthenticationProvider>();
+      return new GraphServiceClient(authProvider);
+  });
+  ````
+  - AccountsController:
+  ````csharp
+  using Microsoft.AspNetCore.Authorization;
+  using Microsoft.AspNetCore.Mvc;
+  using Microsoft.Graph;
+  using Microsoft.Identity.Web.Resource;
+  using System.Threading.Tasks;
+
+  namespace EventManagementApi.Controllers
+  {
+      [Route("api/v1/[controller]")]
+      [ApiController]
+      public class AccountController : ControllerBase
+      {
+          private readonly GraphServiceClient _graphServiceClient;
+
+          public AccountController(GraphServiceClient graphServiceClient)
+          {
+              _graphServiceClient = graphServiceClient;
+          }
+
+          [HttpPost("register")]
+          [Authorize]
+          [RequiredScopeOrAppPermission(
+              RequiredScopesConfigurationKey = "EntraId:Scopes:Write",
+              RequiredAppPermissionsConfigurationKey = "EntraId:AppPermissions:Write"
+          )]
+          public async Task<IActionResult> Register([FromBody] UserRegistrationDto registrationDto)
+          {
+              var user = new User
+              {
+                  AccountEnabled = true,
+                  DisplayName = registrationDto.DisplayName,
+                  MailNickname = registrationDto.UserPrincipalName,
+                  UserPrincipalName = $"{registrationDto.UserPrincipalName}@{_graphServiceClient.Client.ClientOptions.TenantId}",
+                  PasswordProfile = new PasswordProfile
+                  {
+                      ForceChangePasswordNextSignIn = false,
+                      Password = registrationDto.Password
+                  }
+              };
+
+              await _graphServiceClient.Users.Request().AddAsync(user);
+              return Ok(new { Message = "User registered successfully" });
+          }
+      }
+
+      public class UserRegistrationDto
+      {
+          public string DisplayName { get; set; }
+          public string UserPrincipalName { get; set; }
+          public string Password { get; set; }
+      }
+  }
+  ````
+  - appsettings.json
+  ````json
+  {
+  "EntraId": {
+    "Instance": "https://login.microsoftonline.com/",
+    "Domain": "yourtenant.onmicrosoft.com",
+    "TenantId": "your-tenant-id",
+    "ClientId": "your-client-id",
+    "ClientSecret": "your-client-secret",
+    "CallbackPath": "/signin-oidc",
+    "Scopes": {
+      "Read": "api://your-api-client-id/Events.Read",
+      "Write": "api://your-api-client-id/Events.Write"
+    },
+    "AppPermissions": {
+      "Read": "EventProvider",
+      "Write": "Admin"
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=your_host;Database=your_db;Username=your_user;Password=your_password"
+  },
+  "ApplicationInsights": {
+    "ConnectionString": "your_application_insights_connection_string"
+  },
+  "RedisCache": {
+    "ConnectionString": "your_redis_cache_connection_string"
+  },
+  "ServiceBus": {
+    "QueueName": "event-registrations-queue",
+    "ConnectionString": "your_service_bus_connection_string"
+  },
+  "BlobStorage": {
+    "ConnectionString": "your_blob_storage_connection_string"
+  },
+  "CosmosDb": {
+    "Account": "your_cosmos_db_account_endpoint",
+    "Key": "your_cosmos_db_account_key",
+    "DatabaseName": "EventManagement"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  },
+  "AllowedHosts": "*"
+  }
+  ````
