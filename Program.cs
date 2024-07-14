@@ -3,13 +3,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using EventManagementApi.Data;
 using Azure.Storage.Blobs;
 using Azure.Messaging.ServiceBus;
 using Microsoft.OpenApi.Models;
 using EventManagementApi.Entity;
+using EventManagementApi.Database;
 
 var builder = WebApplication.CreateBuilder(args);
+
 
 // Add services to the container
 builder.Services.AddControllers();
@@ -68,6 +69,13 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+// Ensure seed data on application startup
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    SeedingData.Initialize(services).Wait();
+}
 
 if (app.Environment.IsDevelopment())
 {

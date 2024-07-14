@@ -8,7 +8,7 @@ using EventManagementApi.Database;
 
 namespace EventManagementApi.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/v1/accounts")]
     [ApiController]
     public class AccountsController : ControllerBase
     {
@@ -101,11 +101,11 @@ namespace EventManagementApi.Controllers
             return Ok(users);
         }
 
-        [HttpDelete("{id}")]
+        [HttpDelete("/{id}")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> DeleteUser(Guid Id)
+        public async Task<IActionResult> DeleteUser(Guid id)
         {
-            var user = await _userManager.FindByIdAsync(id);
+            var user = await _userManager.FindByIdAsync(id.ToString());
 
             if (user == null)
             {

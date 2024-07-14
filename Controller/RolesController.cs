@@ -6,7 +6,7 @@ using EventManagementApi.Entity;
 
 namespace EventManagementApi.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/v1/roles")]
     [ApiController]
     [Authorize(Policy = "Admin")]
     public class RolesController : ControllerBase

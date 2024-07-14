@@ -2,7 +2,7 @@ using EventManagementApi.Entity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventManagementApi.Entities
+namespace EventManagementApi.Database
 {
     public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     {
