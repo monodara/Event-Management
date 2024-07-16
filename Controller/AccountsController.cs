@@ -61,8 +61,8 @@ namespace EventManagementApi.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] AccountLoginDto model)
         {
-            var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, false, false);
 
+            var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, false, false);
             if (!result.Succeeded)
             {
                 return Unauthorized(new { Message = "Invalid login attempt" });
@@ -144,16 +144,25 @@ namespace EventManagementApi.Controllers
             return BadRequest(result.Errors);
         }
 
-        private string GenerateJwtToken(ApplicationUser user)
+        private async Task<string> GenerateJwtToken(ApplicationUser user)
         {
-            var claims = new[]
-                                {
-                            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                            new Claim(ClaimTypes.Name, user.UserName)
-                        };
+            var userRoles = await _userManager.GetRolesAsync(user);
+            foreach (var role in userRoles)
+            {
+                Console.WriteLine($"Role: {role}");
+            }
 
+            // 创建 JWT 声明
+            var claims = new List<Claim>
+    {
+        new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+        new Claim(ClaimTypes.Name, user.UserName)
+    };
+
+            // 添加角色声明
+            claims.AddRange(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -166,5 +175,6 @@ namespace EventManagementApi.Controllers
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
     }
 }

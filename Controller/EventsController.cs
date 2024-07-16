@@ -51,7 +51,6 @@ namespace EventManagementApi.Controllers
                             .Select(c => c.Value)
                             .ToList();
 
-            // 输出到控制台或日志
             Console.WriteLine("Current user roles: " + string.Join(", ", userRoles));
             Console.WriteLine(HttpContext.User.Identity.IsAuthenticated);
             var eventToCreate = _mapper.Map<EventCreateDto, Event>(eventCreateDto);
