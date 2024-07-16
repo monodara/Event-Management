@@ -13,16 +13,12 @@ namespace EventManagementApi.DTO
         public string Location { get; set; }
         public string Date { get; set; }
         public string OrganizerId { get; set; }
+    }
 
-        public Event ToEvent()
-        {
-            var eventToCreate = new Event();
-            eventToCreate.Name = Name;
-            eventToCreate.Description = Description;
-            eventToCreate.Location = Location;
-            eventToCreate.Date = Date;
-            eventToCreate.OrganizerId = OrganizerId;
-            return eventToCreate;
-        }
+    public class EventUpdateDto{
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public string Location { get; set; }
+        public string Date { get; set; }
     }
 }

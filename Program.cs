@@ -8,12 +8,19 @@ using Azure.Messaging.ServiceBus;
 using Microsoft.OpenApi.Models;
 using EventManagementApi.Entity;
 using EventManagementApi.Database;
+using EventManagementApi.utils;
+using Microsoft.Azure.Cosmos;
 
 var builder = WebApplication.CreateBuilder(args);
 
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers(
+    Options =>
+    {
+        Options.SuppressAsyncSuffixInActionNames = false;
+    }
+);
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -41,12 +48,24 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("Admin", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("EventProvider", policy => policy.RequireRole("EventProvider"));
+    options.AddPolicy("User", policy => policy.RequireRole("User"));
+});
 
 builder.Services.AddSingleton(s => new BlobServiceClient(builder.Configuration["BlobStorage:ConnectionString"]));
 builder.Services.AddSingleton(s => new ServiceBusClient(builder.Configuration["ServiceBus:ConnectionString"]));
 // builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(builder.Configuration["RedisCache:ConnectionString"]));
 builder.Services.AddApplicationInsightsTelemetry(builder.Configuration["ApplicationInsights:ConnectionString"]);
+
+builder.Services.AddSingleton(s =>
+{
+    var accountEndpoint = builder.Configuration["CosmosDb:Account"];
+    var accountKey = builder.Configuration["CosmosDb:Key"];
+    return new CosmosClient(accountEndpoint, accountKey);
+});
 
 // Add Swagger services
 builder.Services.AddSwaggerGen(c =>
@@ -63,9 +82,20 @@ builder.Services.AddSwaggerGen(c =>
         In = ParameterLocation.Header,
         Description = "Please enter into field the word 'Bearer' followed by a space and the JWT value",
         Name = "Authorization",
-        Type = SecuritySchemeType.OAuth2,
+        Type = SecuritySchemeType.Http,
         Scheme = "Bearer"
     });
+});
+
+// add automapper dependency injection
+builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAnyOriginPolicy",
+        builder => builder.AllowAnyOrigin()
+                          .AllowAnyHeader()
+                          .AllowAnyMethod());
 });
 
 var app = builder.Build();
@@ -95,6 +125,7 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = string.Empty; // Set Swagger UI at the app's root
 });
 
+app.UseCors("AllowAnyOriginPolicy");
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();

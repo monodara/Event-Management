@@ -1,9 +1,12 @@
+using System.Security.Claims;
+using AutoMapper;
 using EventManagementApi.Database;
 using EventManagementApi.DTO;
 using EventManagementApi.Entity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Cosmos;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Client;
 
 
@@ -18,21 +21,24 @@ namespace EventManagementApi.Controllers
         private readonly Container _registrationContainer;
         private readonly IConfiguration _configuration;
         private readonly ApplicationDbContext _dbContext;
+        private readonly IMapper _mapper;
 
-        public EventsController(CosmosClient cosmosClient, IConfiguration configuration, ApplicationDbContext context)
+        public EventsController(CosmosClient cosmosClient, IConfiguration configuration, ApplicationDbContext context, IMapper mapper)
         {
             _cosmosClient = cosmosClient;
             _configuration = configuration;
             _container = _cosmosClient.GetContainer(_configuration["CosmosDb:DatabaseName"], "Events");
             _registrationContainer = _cosmosClient.GetContainer(_configuration["CosmosDb:DatabaseName"], "EventRegistrations");
             _dbContext = context;
+            _mapper = mapper;
         }
 
         // Accessible by all authenticated users
         [HttpGet]
         public async Task<IActionResult> GetEvents()
         {
-            return null;
+            var eventList = await _dbContext.Events.ToListAsync();
+            return Ok(eventList);
         }
 
         // Accessible by Event Providers
@@ -40,34 +46,43 @@ namespace EventManagementApi.Controllers
         // [Authorize(Policy = "EventProvider")]
         public async Task<ActionResult<Event>> CreateEvent([FromBody] EventCreateDto eventCreateDto)
         {
-    
+            var userRoles = HttpContext.User.Claims
+                            .Where(c => c.Type == ClaimTypes.Role)
+                            .Select(c => c.Value)
+                            .ToList();
 
-            // var eventToCreate = eventCreateDto.ToEvent();
-            // _dbContext.Events.Add(eventToCreate);
-            // await _dbContext.SaveChangesAsync();
-            // return CreatedAtAction(nameof(CreateEvent), new { id = eventToCreate.Id }, CreateEvent);
-            return null;
+            // 输出到控制台或日志
+            Console.WriteLine("Current user roles: " + string.Join(", ", userRoles));
+            Console.WriteLine(HttpContext.User.Identity.IsAuthenticated);
+            var eventToCreate = _mapper.Map<EventCreateDto, Event>(eventCreateDto);
+            await _dbContext.Events.AddAsync(eventToCreate);
+            await _dbContext.SaveChangesAsync();
+            return CreatedAtAction(nameof(CreateEvent), new { id = eventToCreate.Id }, eventToCreate);
         }
 
         // Accessible by all authenticated users
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetEventById(string id)
+        public async Task<IActionResult> GetEventById(Guid id)
         {
-            return null;
+            var foundEventById = await _dbContext.Events.FirstOrDefaultAsync(u => u.Id == id);
+            return Ok(foundEventById);
         }
 
         // Accessible by Event Providers
         [HttpPut("{id}")]
         [Authorize(Policy = "EventProvider")]
-        public async Task<IActionResult> UpdateEvent(string id, [FromBody] Event updatedEvent)
+        public async Task<IActionResult> UpdateEvent(Guid id, [FromBody] EventUpdateDto updatedEvent)
         {
-            return null;
+            var foundEvent = await GetEventById(id);
+            _dbContext.Update(_mapper.Map<EventUpdateDto, Event>(updatedEvent));
+            await _dbContext.SaveChangesAsync();
+            return Ok(foundEvent);
         }
 
         // Accessible by Admins
         [HttpDelete("{id}")]
         [Authorize(Policy = "Admin")]
-        public async Task<IActionResult> DeleteEvent(string id)
+        public async Task<IActionResult> DeleteEvent(Guid id)
         {
             return null;
         }
