@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using AutoMapper;
+using Azure.Storage.Blobs;
 using EventManagementApi.Database;
 using EventManagementApi.DTO;
 using EventManagementApi.Entity;
@@ -20,13 +21,15 @@ namespace EventManagementApi.Controllers
         private readonly Container _registrationContainer;
         private readonly IConfiguration _configuration;
         private readonly ApplicationDbContext _dbContext;
+        private readonly BlobServiceClient _blobServiceClient;
         private readonly IMapper _mapper;
 
-        public EventsController(CosmosClient cosmosClient, IConfiguration configuration, ApplicationDbContext context, IMapper mapper)
+        public EventsController(CosmosClient cosmosClient, IConfiguration configuration, BlobServiceClient blobServiceClient, ApplicationDbContext context, IMapper mapper)
         {
             _cosmosClient = cosmosClient;
             _configuration = configuration;
             _container = _cosmosClient.GetContainer(_configuration["CosmosDb:DatabaseName"], "Events");
+            _blobServiceClient = _blobServiceClient = blobServiceClient;
             _registrationContainer = _cosmosClient.GetContainer(_configuration["CosmosDb:DatabaseName"], "EventRegistrations");
             _dbContext = context;
             _mapper = mapper;
@@ -81,6 +84,44 @@ namespace EventManagementApi.Controllers
             await _dbContext.SaveChangesAsync();
             return Ok(true);
         }
+
+        [HttpPost("{id}/upload")]
+        [Authorize(Policy = "EventProvider")]
+        public async Task<IActionResult> UploadEventFile(Guid id, IFormFile file)
+        {
+            // Check if event exists
+            var eventEntity = await _dbContext.Events.FindAsync(id);
+            if (eventEntity == null)
+            {
+                return NotFound(new { Message = "Event not found." });
+            }
+
+            // Check if file is provided
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new { Message = "No file provided." });
+            }
+
+            // Upload file to Azure Blob Storage
+            var containerClient = _blobServiceClient.GetBlobContainerClient(_configuration["BlobStorage:EventMaterialContainer"]);
+            await containerClient.CreateIfNotExistsAsync();
+            var blobClient = containerClient.GetBlobClient(file.FileName);
+
+            using (var stream = file.OpenReadStream())
+            {
+                await blobClient.UploadAsync(stream, true);
+            }
+
+            // Update Event with the new file URI
+            var fileUri = blobClient.Uri.ToString();
+            eventEntity.DocumentUris.Add(fileUri);
+
+            _dbContext.Events.Update(eventEntity);
+            await _dbContext.SaveChangesAsync();
+
+            return Ok(new { Message = "File uploaded successfully.", FilePath = blobClient.Uri.ToString() });
+        }
+
 
         // User can register for an event
         [HttpPost("{id}/register")]

@@ -22,18 +22,28 @@ namespace EventManagementApi.Database
                     await roleManager.CreateAsync(new IdentityRole("User"));
                 }
 
-                // Ensure there are users available
                 if (!context.Users.Any())
                 {
                     var adminUser = new ApplicationUser
                     {
                         UserName = "admin@example.com",
                         Email = "admin@example.com",
-                        FullName = "Admin User"
+                        FullName = "Admin User",
                     };
 
-                    await userManager.CreateAsync(adminUser, "P@ssw0rd");
-                    await userManager.AddToRoleAsync(adminUser, "Admin");
+                    var result = await userManager.CreateAsync(adminUser, "P@ssw0rd");
+                    if (result.Succeeded)
+                    {
+                        await userManager.AddToRoleAsync(adminUser, "Admin");
+                    }
+                    else
+                    {
+                        // Log the errors
+                        foreach (var error in result.Errors)
+                        {
+                            Console.WriteLine($"Error creating user: {error.Description}");
+                        }
+                    }
                 }
             }
         }

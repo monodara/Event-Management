@@ -13,6 +13,7 @@ namespace EventManagementApi.DTO
         public string Location { get; set; }
         public string Date { get; set; }
         public string OrganizerId { get; set; }
+        
     }
 
     public class EventUpdateDto{

@@ -9,5 +9,6 @@ namespace EventManagementApi.Entity
         public string Date { get; set; }
         public string OrganizerId { get; set; }
         public ApplicationUser Organizer { get; set; }
+        public List<string> DocumentUris { get; set; } = new List<string>();
     }
 }
