@@ -17,7 +17,7 @@ namespace EventManagementApi.Controllers
     public class AccountsController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        private readonly ApplicationDbContext _context;
+        private readonly ApplicationDbContext _dbContext;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly BlobServiceClient _blobServiceClient;
@@ -30,7 +30,7 @@ namespace EventManagementApi.Controllers
             BlobServiceClient blobServiceClient)
         {
             _configuration = configuration;
-            _context = context;
+            _dbContext = context;
             _userManager = userManager;
             _signInManager = signInManager;
             _blobServiceClient = blobServiceClient;
@@ -119,7 +119,7 @@ namespace EventManagementApi.Controllers
         [Authorize(Roles = "Admin")]
         public IActionResult GetUsers()
         {
-            var users = _context.Users.Select(u => new { u.Id, u.UserName, u.Email, u.FullName }).ToList();
+            var users = _dbContext.Users.Select(u => new { u.Id, u.UserName, u.Email, u.FullName }).ToList();
             return Ok(users);
         }
 
@@ -143,6 +143,37 @@ namespace EventManagementApi.Controllers
 
             return BadRequest(result.Errors);
         }
+
+        [HttpPost("{id}/upload")]
+        // [Authorize(Policy = "User")]
+        public async Task<IActionResult> UploadAvatar(Guid id, IFormFile file)
+        {
+            // Check if event exists
+            var user = await _dbContext.Users.FindAsync(id.ToString());
+            if (user == null)
+            {
+                return NotFound(new { Message = "User not found." });
+            }
+
+            // Check if file is provided
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new { Message = "No file provided." });
+            }
+
+            // Upload file to Azure Blob Storage
+            var containerClient = _blobServiceClient.GetBlobContainerClient(_configuration["BlobStorage:UserProfileContainer"]);
+            await containerClient.CreateIfNotExistsAsync();
+            var blobClient = containerClient.GetBlobClient(user.Id.ToString());
+
+            using (var stream = file.OpenReadStream())
+            {
+                await blobClient.UploadAsync(stream, true);
+            }
+
+            return Ok(new { Message = "Avatar uploaded successfully.", FilePath = blobClient.Uri.ToString() });
+        }
+
 
         private async Task<string> GenerateJwtToken(ApplicationUser user)
         {
