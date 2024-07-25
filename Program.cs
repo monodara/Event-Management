@@ -29,6 +29,8 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
+
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -36,6 +38,24 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    // options.Events = new JwtBearerEvents
+    // {
+    //     OnMessageReceived = context =>
+    //     {
+    //         Console.WriteLine($"Token received: {context.Request.Headers["Authorization"]}");
+    //         return Task.CompletedTask;
+    //     },
+    //     OnTokenValidated = context =>
+    //     {
+    //         Console.WriteLine($"Token validated: {context.SecurityToken}");
+    //         return Task.CompletedTask;
+    //     },
+    //     OnAuthenticationFailed = context =>
+    //     {
+    //         Console.WriteLine($"Authentication failed: {context.Exception}");
+    //         return Task.CompletedTask;
+    //     }
+    // };
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -125,12 +145,27 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = string.Empty; // Set Swagger UI at the app's root
 });
 
+
+
 app.UseCors("AllowAnyOriginPolicy");
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// app.Use(async (context, next) =>
+// {
+//     var token = context.Request.Headers["Authorization"].ToString();
+//     Console.WriteLine($"Token: {token}");
+//     await next();
+//     var user = context.User;
+//     Console.WriteLine(user.Claims.Count());
+//     foreach (var claim in user.Claims)
+//     {
+//         Console.WriteLine($"Claim Type: {claim.Type}, Claim Value: {claim.Value}");
+//     }
+// });
 app.MapControllers();
 
 app.Run();

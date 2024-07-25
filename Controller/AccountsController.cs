@@ -147,28 +147,21 @@ namespace EventManagementApi.Controllers
         private async Task<string> GenerateJwtToken(ApplicationUser user)
         {
             var userRoles = await _userManager.GetRolesAsync(user);
-            foreach (var role in userRoles)
-            {
-                Console.WriteLine($"Role: {role}");
-            }
-
-            // 创建 JWT 声明
             var claims = new List<Claim>
-    {
-        new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-        new Claim(ClaimTypes.Name, user.UserName)
-    };
+                                    {
+                                        new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                                        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                                        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                                        new Claim(ClaimTypes.Name, user.UserName)
+                                    };
 
-            // 添加角色声明
             claims.AddRange(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
                 _configuration["Jwt:Issuer"],
-                _configuration["Jwt:Issuer"],
+                _configuration["Jwt:Audience"],
                 claims,
                 expires: DateTime.Now.AddMinutes(30),
                 signingCredentials: creds);

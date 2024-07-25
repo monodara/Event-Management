@@ -43,16 +43,9 @@ namespace EventManagementApi.Controllers
 
         // Accessible by Event Providers
         [HttpPost]
-        // [Authorize(Policy = "EventProvider")]
+        [Authorize(Policy = "EventProvider")]
         public async Task<ActionResult<Event>> CreateEvent([FromBody] EventCreateDto eventCreateDto)
         {
-            var userRoles = HttpContext.User.Claims
-                            .Where(c => c.Type == ClaimTypes.Role)
-                            .Select(c => c.Value)
-                            .ToList();
-
-            Console.WriteLine("Current user roles: " + string.Join(", ", userRoles));
-            Console.WriteLine(HttpContext.User.Identity.IsAuthenticated);
             var eventToCreate = _mapper.Map<EventCreateDto, Event>(eventCreateDto);
             await _dbContext.Events.AddAsync(eventToCreate);
             await _dbContext.SaveChangesAsync();
@@ -63,8 +56,9 @@ namespace EventManagementApi.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetEventById(Guid id)
         {
-            var foundEventById = await _dbContext.Events.FirstOrDefaultAsync(u => u.Id == id);
-            return Ok(foundEventById);
+            var foundEventById = await _dbContext.Events.Include(e => e.Organizer).FirstOrDefaultAsync(u => u.Id == id);
+            var eventReadDto = _mapper.Map<Event, EventReadDto>(foundEventById);
+            return Ok(eventReadDto);
         }
 
         // Accessible by Event Providers
@@ -83,7 +77,10 @@ namespace EventManagementApi.Controllers
         [Authorize(Policy = "Admin")]
         public async Task<IActionResult> DeleteEvent(Guid id)
         {
-            return null;
+            var foundEvent = await _dbContext.Events.FirstOrDefaultAsync(u => u.Id == id);
+            _dbContext.Remove(foundEvent);
+            await _dbContext.SaveChangesAsync();
+            return Ok(true);
         }
 
         // User can register for an event
@@ -91,6 +88,7 @@ namespace EventManagementApi.Controllers
         [Authorize(Policy = "User")]
         public async Task<IActionResult> RegisterForEvent(string id)
         {
+
             return null;
         }
 
