@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Cosmos;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Identity.Client;
 
 
 namespace EventManagementApi.Controllers
@@ -67,7 +66,7 @@ namespace EventManagementApi.Controllers
         public async Task<IActionResult> UpdateEvent(Guid id, [FromBody] EventUpdateDto updatedEvent)
         {
             var foundEvent = await GetEventById(id);
-            _dbContext.Update(_mapper.Map<EventUpdateDto, Event>(updatedEvent));
+            _dbContext.Events.Update(_mapper.Map<EventUpdateDto, Event>(updatedEvent));
             await _dbContext.SaveChangesAsync();
             return Ok(foundEvent);
         }
@@ -78,7 +77,7 @@ namespace EventManagementApi.Controllers
         public async Task<IActionResult> DeleteEvent(Guid id)
         {
             var foundEvent = await _dbContext.Events.FirstOrDefaultAsync(u => u.Id == id);
-            _dbContext.Remove(foundEvent);
+            _dbContext.Events.Remove(foundEvent);
             await _dbContext.SaveChangesAsync();
             return Ok(true);
         }
@@ -88,8 +87,17 @@ namespace EventManagementApi.Controllers
         [Authorize(Policy = "User")]
         public async Task<IActionResult> RegisterForEvent(string id)
         {
+            var userId = HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            // Create the event registration record
+            var eventRegistration = new EventRegistration
+            {
+                UserId = userId,
+                EventId = id
+            };
 
-            return null;
+            await _dbContext.EventRegistrations.AddAsync(eventRegistration);
+            await _dbContext.SaveChangesAsync();
+            return CreatedAtAction(nameof(RegisterForEvent), new { Message = "Thank you for registering this event!" }, eventRegistration);
         }
 
         // User can unregister from an event
@@ -97,7 +105,20 @@ namespace EventManagementApi.Controllers
         [Authorize(Policy = "User")]
         public async Task<IActionResult> UnregisterFromEvent(string id)
         {
-            return null;
+            var userId = HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var foundRegistration = await _dbContext.EventRegistrations
+                                             .Where(er => er.UserId == userId && er.EventId == id)
+                                             .FirstOrDefaultAsync();
+
+            if (foundRegistration == null)
+            {
+                return NotFound(new { Message = "Registration not found." });
+            }
+
+            _dbContext.EventRegistrations.Remove(foundRegistration);
+            await _dbContext.SaveChangesAsync();
+
+            return Ok(new { Message = "You have unregistered from this event." });
         }
     }
 }

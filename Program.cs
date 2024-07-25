@@ -38,24 +38,24 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    // options.Events = new JwtBearerEvents
-    // {
-    //     OnMessageReceived = context =>
-    //     {
-    //         Console.WriteLine($"Token received: {context.Request.Headers["Authorization"]}");
-    //         return Task.CompletedTask;
-    //     },
-    //     OnTokenValidated = context =>
-    //     {
-    //         Console.WriteLine($"Token validated: {context.SecurityToken}");
-    //         return Task.CompletedTask;
-    //     },
-    //     OnAuthenticationFailed = context =>
-    //     {
-    //         Console.WriteLine($"Authentication failed: {context.Exception}");
-    //         return Task.CompletedTask;
-    //     }
-    // };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            Console.WriteLine($"Token received: {context.Request.Headers["Authorization"]}");
+            return Task.CompletedTask;
+        },
+        OnTokenValidated = context =>
+        {
+            Console.WriteLine($"Token validated: {context.SecurityToken}");
+            return Task.CompletedTask;
+        },
+        OnAuthenticationFailed = context =>
+        {
+            Console.WriteLine($"Authentication failed: {context.Exception}");
+            return Task.CompletedTask;
+        }
+    };
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
