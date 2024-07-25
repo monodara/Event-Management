@@ -15,8 +15,10 @@ namespace EventManagementApi.DTO
 
     public class AccountReadDto
     {
+        public string Id { get; set; }
         public string Email { get; set; }
         public string FullName { get; set; }
+        public string AvatarUri { get; set; }
     }
     public class AccountLoginDto
     {

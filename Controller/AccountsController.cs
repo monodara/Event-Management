@@ -86,7 +86,7 @@ namespace EventManagementApi.Controllers
                 return NotFound();
             }
 
-            return Ok(new { user.UserName, user.Email, user.FullName });
+            return Ok(new { user.UserName, user.Email, user.FullName, AvatarUri = GetAvatarUri(user.Id) });
         }
 
         // Update account details (Accessible by authenticated users)
@@ -119,8 +119,15 @@ namespace EventManagementApi.Controllers
         [Authorize(Roles = "Admin")]
         public IActionResult GetUsers()
         {
-            var users = _dbContext.Users.Select(u => new { u.Id, u.UserName, u.Email, u.FullName }).ToList();
-            return Ok(users);
+            var users = _dbContext.Users.Select(u => new { u.Id, u.UserName, u.Email, u.FullName}).ToList();
+            var userDtos = users.Select(u => new
+            {
+                u.Id,
+                u.Email,
+                u.FullName,
+                AvatarUrl = GetAvatarUri(u.Id) 
+            }).ToList();
+            return Ok(userDtos);
         }
 
         [HttpDelete("/{id}")]
@@ -198,6 +205,13 @@ namespace EventManagementApi.Controllers
                 signingCredentials: creds);
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private string GetAvatarUri(string userId)
+        {
+            var containerName = _configuration["BlobStorage:UserProfileContainer"];
+            var blobUri = new Uri($"https://{_configuration["BlobStorage:Account"]}.blob.core.windows.net/{containerName}/{userId}");
+            return blobUri.ToString();
         }
 
     }
