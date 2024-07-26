@@ -10,5 +10,7 @@ namespace EventManagementApi.Entity
         public string OrganizerId { get; set; }
         public ApplicationUser Organizer { get; set; }
         public List<string> DocumentUris { get; set; } = new List<string>();
+        public int MaxReg { get; set;}
+        public bool IsOpenForReg { get; set;} = true;
     }
 }

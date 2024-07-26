@@ -1,8 +1,10 @@
 bin/
 obj/
-.vscode/
+
 *.http
 # User-specific files
 appsettings.json
 appsettings.*.json
 Migrations/
+
+.vscode/

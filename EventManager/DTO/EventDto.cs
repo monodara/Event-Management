@@ -13,7 +13,8 @@ namespace EventManagementApi.DTO
         public string Location { get; set; }
         public string Date { get; set; }
         public string OrganizerId { get; set; }
-        
+        public int MaxReg { get; set; }
+
     }
 
     public class EventUpdateDto{
@@ -21,6 +22,8 @@ namespace EventManagementApi.DTO
         public string Description { get; set; }
         public string Location { get; set; }
         public string Date { get; set; }
+        public int MaxReg { get; set; }
+        public bool IsOpenForReg { get; set; } 
     }
     public class EventReadDto
     {
@@ -30,5 +33,6 @@ namespace EventManagementApi.DTO
         public string Location { get; set; }
         public string Date { get; set; }
         public ApplicationUser Organizer { get; set; }
+        public bool IsOpenForReg { get; set; }
     }
 }

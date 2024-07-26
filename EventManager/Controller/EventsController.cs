@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using System.Text.Json;
 using AutoMapper;
+using Azure.Messaging.ServiceBus;
 using Azure.Storage.Blobs;
 using EventManagementApi.Database;
 using EventManagementApi.DTO;
@@ -22,14 +24,24 @@ namespace EventManagementApi.Controllers
         private readonly IConfiguration _configuration;
         private readonly ApplicationDbContext _dbContext;
         private readonly BlobServiceClient _blobServiceClient;
+        private readonly ServiceBusClient _serviceBusClient;
+        private readonly string _queueName;
         private readonly IMapper _mapper;
 
-        public EventsController(CosmosClient cosmosClient, IConfiguration configuration, BlobServiceClient blobServiceClient, ApplicationDbContext context, IMapper mapper)
+        public EventsController(
+            CosmosClient cosmosClient, 
+            IConfiguration configuration, 
+            BlobServiceClient blobServiceClient, 
+            ApplicationDbContext context, 
+            ServiceBusClient serviceBusClient,
+            IMapper mapper)
         {
             _cosmosClient = cosmosClient;
             _configuration = configuration;
             _container = _cosmosClient.GetContainer(_configuration["CosmosDb:DatabaseName"], "Events");
             _blobServiceClient = _blobServiceClient = blobServiceClient;
+            _serviceBusClient = serviceBusClient;
+            _queueName = _configuration["ServiceBus:QueueName"];
             _registrationContainer = _cosmosClient.GetContainer(_configuration["CosmosDb:DatabaseName"], "EventRegistrations");
             _dbContext = context;
             _mapper = mapper;
@@ -129,15 +141,51 @@ namespace EventManagementApi.Controllers
         public async Task<IActionResult> RegisterForEvent(string id)
         {
             var userId = HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var foundEventById = await _dbContext.Events.FirstOrDefaultAsync(e => e.Id.ToString() == id);
             // Create the event registration record
             var eventRegistration = new EventRegistration
             {
                 UserId = userId,
                 EventId = id
             };
+            // Serialize the registration object to JSON
+            var messageBody = JsonSerializer.Serialize(eventRegistration);
+            var message = new ServiceBusMessage(messageBody)
+                                    {
+                                        // Add a property of maximum registerer
+                                        ApplicationProperties =
+                                            {
+                                                ["MaxReg"] = foundEventById.MaxReg
+                                            },
+                                        SessionId = Guid.NewGuid().ToString(),
+            };
 
-            await _dbContext.EventRegistrations.AddAsync(eventRegistration);
-            await _dbContext.SaveChangesAsync();
+            // Create a sender client
+            // ServiceBusSender sender = _serviceBusClient.CreateSender(_queueName);
+            // Send message
+            try
+            {
+                // Create a sender client
+                ServiceBusSender sender = _serviceBusClient.CreateSender(_queueName);
+
+                // Send message
+                await sender.SendMessageAsync(message);
+
+                // Log message sent
+                Console.WriteLine("Registration has been sent out");
+            }
+            catch (Exception ex)
+            {
+                // Log exception
+                Console.WriteLine($"Error sending message: {ex.Message}");
+                return StatusCode(500, new { Message = "Error sending message to Service Bus" });
+            }
+
+            // Save registration to CosmosDB 
+
+            // Save registration to PostgreSQL
+            // await _dbContext.EventRegistrations.AddAsync(eventRegistration);
+            // await _dbContext.SaveChangesAsync();
             return CreatedAtAction(nameof(RegisterForEvent), new { Message = "Thank you for registering this event!" }, eventRegistration);
         }
 
