@@ -1,0 +1,35 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.002.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RegisterResultNotiFunctionApp", "RegisterResultNotiFunctionApp.csproj", "{1BF41EB2-3253-4599-889F-0EAB2C6932F1}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "obj", "obj", "{6C10807D-4241-4C9E-839A-2AA16E2842E8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Debug", "Debug", "{E0D6EC95-8E25-4005-8DFC-A8EB2759F1B2}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "net8.0", "net8.0", "{48B12DD8-CAFD-4DEB-A95E-1CFF369DEA54}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1BF41EB2-3253-4599-889F-0EAB2C6932F1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1BF41EB2-3253-4599-889F-0EAB2C6932F1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1BF41EB2-3253-4599-889F-0EAB2C6932F1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1BF41EB2-3253-4599-889F-0EAB2C6932F1}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{E0D6EC95-8E25-4005-8DFC-A8EB2759F1B2} = {6C10807D-4241-4C9E-839A-2AA16E2842E8}
+		{48B12DD8-CAFD-4DEB-A95E-1CFF369DEA54} = {E0D6EC95-8E25-4005-8DFC-A8EB2759F1B2}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D4625CCE-10D8-4F0C-9A91-32D9E0EE7554}
+	EndGlobalSection
+EndGlobal
