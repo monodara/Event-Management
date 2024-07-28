@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using Microsoft.Azure.Cosmos;
+using System.Text.Json;
 
 namespace CheckAvailability.Function
 {
