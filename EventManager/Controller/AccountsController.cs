@@ -41,11 +41,16 @@ namespace EventManagementApi.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Register([FromBody] AccountCreateDto model)
         {
+            var allowedRoles = new List<string> { "User", "EventProvider" };
+            if (!allowedRoles.Contains(model.Role))
+            {
+                return BadRequest(new { Message = "Invalid role specified. Allowed roles are User or EventProvider." });
+            }
+
             var user = new ApplicationUser
             {
                 UserName = model.Email,
-                Email = model.Email,
-                FullName = model.Email
+                Email = model.Email
             };
 
             var result = await _userManager.CreateAsync(user, model.Password);
@@ -61,17 +66,35 @@ namespace EventManagementApi.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] AccountLoginDto model)
         {
+            var user = await _userManager.FindByEmailAsync(model.Email);
+            
+            if (user == null)
+            {
+                return Unauthorized(new { Message = "Invalid login attempt" });
+            }
 
-            var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, false, false);
+            // Check if user is locked out or password is correct
+            var result = await _signInManager.CheckPasswordSignInAsync(user, model.Password, true);
+            
+            if (result.IsLockedOut)
+            {
+                return StatusCode(423, new { Message = "Account is locked. Please try again later." });
+            }
+
             if (!result.Succeeded)
             {
                 return Unauthorized(new { Message = "Invalid login attempt" });
             }
 
-            var user = await _userManager.FindByEmailAsync(model.Email);
-            var tokenString = GenerateJwtToken(user);
+            var tokenString = await GenerateJwtToken(user);
+            var roles = await _userManager.GetRolesAsync(user);
 
-            return Ok(new { Token = tokenString });
+            return Ok(new 
+            { 
+                Token = tokenString,
+                Expiration = DateTime.UtcNow.AddMinutes(30),
+                User = new { user.Email, Roles = roles }
+            });
         }
 
         // General account management (Accessible by authenticated users)
@@ -86,7 +109,7 @@ namespace EventManagementApi.Controllers
                 return NotFound();
             }
 
-            return Ok(new { user.UserName, user.Email, user.FullName, AvatarUri = GetAvatarUri(user.Id) });
+            return Ok(new { user.UserName, user.Email, AvatarUri = GetAvatarUri(user.Id) });
         }
 
         // Update account details (Accessible by authenticated users)
@@ -102,7 +125,6 @@ namespace EventManagementApi.Controllers
             }
 
             user.Email = model.Email;
-            user.FullName = model.FullName;
 
             var result = await _userManager.UpdateAsync(user);
 
@@ -119,12 +141,11 @@ namespace EventManagementApi.Controllers
         [Authorize(Roles = "Admin")]
         public IActionResult GetUsers()
         {
-            var users = _dbContext.Users.Select(u => new { u.Id, u.UserName, u.Email, u.FullName}).ToList();
+            var users = _dbContext.Users.Select(u => new { u.Id, u.UserName, u.Email}).ToList();
             var userDtos = users.Select(u => new
             {
                 u.Id,
                 u.Email,
-                u.FullName,
                 AvatarUrl = GetAvatarUri(u.Id) 
             }).ToList();
             return Ok(userDtos);
@@ -152,17 +173,23 @@ namespace EventManagementApi.Controllers
         }
 
         [HttpPost("{id}/upload")]
-        // [Authorize(Policy = "User")]
-        public async Task<IActionResult> UploadAvatar(Guid id, IFormFile file)
+        [Authorize]
+        public async Task<IActionResult> UploadAvatar(string id, IFormFile file)
         {
-            // Check if event exists
-            var user = await _dbContext.Users.FindAsync(id.ToString());
+            var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var isAdmin = User.IsInRole("Admin");
+
+            if (currentUserId != id && !isAdmin)
+            {
+                return Forbid();
+            }
+
+            var user = await _userManager.FindByIdAsync(id);
             if (user == null)
             {
                 return NotFound(new { Message = "User not found." });
             }
 
-            // Check if file is provided
             if (file == null || file.Length == 0)
             {
                 return BadRequest(new { Message = "No file provided." });
@@ -171,7 +198,7 @@ namespace EventManagementApi.Controllers
             // Upload file to Azure Blob Storage
             var containerClient = _blobServiceClient.GetBlobContainerClient(_configuration["BlobStorage:UserProfileContainer"]);
             await containerClient.CreateIfNotExistsAsync();
-            var blobClient = containerClient.GetBlobClient(user.Id.ToString());
+            var blobClient = containerClient.GetBlobClient(user.Id);
 
             using (var stream = file.OpenReadStream())
             {
@@ -186,12 +213,13 @@ namespace EventManagementApi.Controllers
         {
             var userRoles = await _userManager.GetRolesAsync(user);
             var claims = new List<Claim>
-                                    {
-                                        new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                                        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                                        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                                        new Claim(ClaimTypes.Name, user.UserName)
-                                    };
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(ClaimTypes.Name, user.UserName),
+                new Claim(ClaimTypes.Email, user.Email)
+            };
 
             claims.AddRange(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
@@ -201,7 +229,7 @@ namespace EventManagementApi.Controllers
                 _configuration["Jwt:Issuer"],
                 _configuration["Jwt:Audience"],
                 claims,
-                expires: DateTime.Now.AddMinutes(30),
+                expires: DateTime.UtcNow.AddMinutes(30),
                 signingCredentials: creds);
 
             return new JwtSecurityTokenHandler().WriteToken(token);

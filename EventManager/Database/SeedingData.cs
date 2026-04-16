@@ -27,8 +27,7 @@ namespace EventManagementApi.Database
                     var adminUser = new ApplicationUser
                     {
                         UserName = "admin@example.com",
-                        Email = "admin@example.com",
-                        FullName = "Admin User",
+                        Email = "admin@example.com"
                     };
 
                     var result = await userManager.CreateAsync(adminUser, "P@ssw0rd");

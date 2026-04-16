@@ -10,14 +10,12 @@ namespace EventManagementApi.DTO
     public class AccountUpdateDto
     {
         public string Email { get; set; }
-        public string FullName { get; set; }
     }
 
     public class AccountReadDto
     {
         public string Id { get; set; }
         public string Email { get; set; }
-        public string FullName { get; set; }
         public string AvatarUri { get; set; }
     }
     public class AccountLoginDto
@@ -26,4 +24,9 @@ namespace EventManagementApi.DTO
         public string Password { get; set; }
     }
 
+    public class UserSummaryDto
+    {
+        public string Id { get; set; }
+        public string Email { get; set; }
+    }
 }
